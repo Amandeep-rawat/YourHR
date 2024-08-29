@@ -30,10 +30,7 @@ const upload = multer({ dest: 'uploads/' }); // Files will be uploaded to the 'u
 // Function to connect to MongoDB
 async function connectToMongoDB() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
+    await mongoose.connect(process.env.MONGODB_URI);
     console.log('MongoDB connected');
   } catch (err) {
     console.error('MongoDB connection error:', err);
