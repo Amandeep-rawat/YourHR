@@ -16,7 +16,6 @@ const port = process.env.PORT || 3000; // Use environment port if available
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
 // Static files access
 app.use(express.static(path.join(__dirname, '../frontend/dist'))); // Adjust path as necessary
 
@@ -28,57 +27,75 @@ app.use(express.urlencoded({ extended: true }));
 // Configure multer for handling file uploads
 const upload = multer({ dest: 'uploads/' }); // Files will be uploaded to the 'uploads' directory
 
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
-
-// Serve the frontend app
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html')); // Adjust path as necessary
-});
-
-// Endpoint to handle signup form submissions
-app.post('/api/signup', upload.single('Resume'), async (req, res) => {
+// Function to connect to MongoDB
+async function connectToMongoDB() {
   try {
-    const existingUser = await Signup.findOne({ Email: req.body.Email });
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+    console.log('MongoDB connected');
+  } catch (err) {
+    console.error('MongoDB connection error:', err);
+    process.exit(1); // Exit the process if unable to connect to MongoDB
+  }
+}
 
-    if (existingUser) {
-      return res.status(400).json({
-        message: 'You have already applied for a job.',
+// Connect to MongoDB and start the server
+async function startServer() {
+  await connectToMongoDB();
+
+  // Serve the frontend app
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/dist/index.html')); // Adjust path as necessary
+  });
+
+  // Endpoint to handle signup form submissions
+  app.post('/api/signup', upload.single('Resume'), async (req, res) => {
+    try {
+      const existingUser = await Signup.findOne({ Email: req.body.Email });
+
+      if (existingUser) {
+        return res.status(400).json({
+          message: 'You have already applied for a job.',
+        });
+      }
+
+      // Create a new signup record
+      const newSignup = new Signup({
+        Username: req.body.Username,
+        Email: req.body.Email,
+        JobTitle: req.body.JobTitle,
+        MobileNumber: req.body.MobileNumber,
+        CollegeName: req.body.CollegeName,
+        State: req.body.State,
+        Resume: req.file.path // Save the file path in the database
+      });
+
+      // Save to the database
+      await newSignup.save();
+
+      // Send success response
+      res.json({
+        message: 'Signup data received and saved successfully!',
+        receivedData: req.body,
+        receivedFile: req.file
+      });
+    } catch (error) {
+      console.error('Error saving signup data:', error);
+
+      // Send error response
+      res.status(500).json({
+        message: 'Error saving signup data',
+        error
       });
     }
+  });
 
-    // Create a new signup record
-    const newSignup = new Signup({
-      Username: req.body.Username,
-      Email: req.body.Email,
-      JobTitle: req.body.JobTitle,
-      MobileNumber: req.body.MobileNumber,
-      CollegeName: req.body.CollegeName,
-      State: req.body.State,
-      Resume: req.file.path // Save the file path in the database
-    });
+  // Start the server
+  app.listen(port, () => {
+    console.log(`YourHR app listening on port ${port}`);
+  });
+}
 
-    // Save to the database
-    await newSignup.save();
-
-    // Send success response
-    res.json({
-      message: 'Signup data received and saved successfully!',
-      receivedData: req.body,
-      receivedFile: req.file
-    });
-  } catch (error) {
-    console.error('Error saving signup data:', error);
-
-    // Send error response
-    res.status(500).json({
-      message: 'Error saving signup data',
-      error
-    });
-  }
-});
-
-app.listen(port, () => {
-  console.log(`YourHR app listening on port ${port}`);
-});
+startServer(); // Start the server
